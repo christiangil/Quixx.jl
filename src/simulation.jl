@@ -243,7 +243,7 @@ score(ps::PlayerState) = score(ps.red) + score(ps.yellow) + score(ps.blue) + sco
 
 
 function run_game(players; verbose::Bool=true)
-    if verbose; println("Let's Quixx!")
+    if verbose; println("Let's Quixx!") end
     gs = GameState(players)
     while !gs.game_over
         if verbose
