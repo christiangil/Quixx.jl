@@ -45,7 +45,7 @@ Update a track state with new progress, returns whether or not the track was loc
 """
 function update_TrackState!(ts::TrackState, dice_roll::Int; n_marked_increase::Int=1)
     @assert 1 <= n_marked_increase <= 2  # could be recording two dice rolls of progress at once
-    proposed_progress = track_convert(dice_roll, ts)
+    proposed_progress = dice_number_to_progress(dice_roll, ts)
     @assert proposed_progress > ts.progress
     just_locked = proposed_progress == 12
     if just_locked; @assert ts.n_marked >= 5 end
@@ -59,7 +59,9 @@ end
 is_locked(ts::TrackState) = ts.progress==12
 
 
-track_convert(progress::Int, ts::TrackState) = ts.reversed ? (14 - progress) : progress
+dice_number_to_progress(dice_number::Int, reversed::Bool) = reversed ? (14 - dice_number) : dice_number
+dice_number_to_progress(dice_number::Int, ts::TrackState) = dice_number_to_progress(dice_number, ts.reversed)
+progress_to_dice_number(progress::Int, x) = dice_number_to_progress(progress, x)
 
 
 """
@@ -103,11 +105,13 @@ PlayerState(strategy) = PlayerState(TrackState(0, 1, false), TrackState(0, 1, fa
 (ps::PlayerState)(s::String) = getproperty(ps, Symbol(s))
 (ps::PlayerState)(i::Int) = getproperty(ps, Symbol(track_colors[i]))
 function println(ps::PlayerState)
-    str = ""
+    str = "Player progress, "
     for i in eachindex(track_colors)
-        str *= color_emojis[i] * ": $(roll(i)) "
+        ts = ps(i)
+        ts.progress == 1 ? dice_number = "None" : dice_number = string(progress_to_dice_number(ts.progress, ts))
+        str *= color_emojis[i] * ": $dice_number ($(ts.n_marked)) "
     end
-    str *= white_emoji * white_emoji * ": $(roll.white1), $(roll.white2)"
+    str *= "Penalties: $(ps.penalties)"
     println(str)
 end
 
@@ -157,10 +161,15 @@ end
 (roll::Roll)(i::Int) = getproperty(roll, Symbol(track_colors[i]))
 const color_emojis = ["🟥", "🟨", "🟩", "🟦"]
 const white_emoji = "⬜"
-function println(roll::Roll)
+function println(roll::Roll; locks::Vector{Bool}=[false, false, false, false])
+    @assert length(locks) == n_track_colors
     str = ""
     for i in eachindex(track_colors)
-        str *= color_emojis[i] * ": $(roll(i)) "
+        if locks[i]
+            str *= color_emojis[i] * ": X "
+        else
+            str *= color_emojis[i] * ": $(roll(i)) "
+        end
     end
     str *= white_emoji * white_emoji * ": $(roll.white1), $(roll.white2)"
     println(str)
@@ -188,8 +197,8 @@ mutable struct GameState
 end
 validate_GameState(gs::GameState) = validate_GameState(gs.red_locked, gs.yellow_locked, gs.green_locked, gs.blue_locked, gs.game_over, gs.whose_turn, gs.players)
 GameState(players) = GameState(false, false, false, false, false, 1, players, Roll())
-(ps::GameState)(s::String) = getproperty(ps, Symbol(s * "_locked"))
-(ps::GameState)(i::Int) = getproperty(ps, Symbol(track_colors[i]))
+(gs::GameState)(s::String) = getproperty(gs, Symbol(s * "_locked"))
+(gs::GameState)(i::Int) = gs(track_colors[i])
 
 
 """
@@ -239,7 +248,7 @@ score(ts::TrackState) = triangular_numbers[ts.n_marked+1]
 
 Calulates the player's current score
 """
-score(ps::PlayerState) = score(ps.red) + score(ps.yellow) + score(ps.blue) + score(ps.green) - 5 * penalties
+score(ps::PlayerState) = score(ps.red) + score(ps.yellow) + score(ps.blue) + score(ps.green) - 5 * ps.penalties
 
 
 function run_game(players; verbose::Bool=true)
@@ -248,9 +257,10 @@ function run_game(players; verbose::Bool=true)
     while !gs.game_over
         if verbose
             println("Player $(gs.whose_turn)'s turn")
-            println(gs.roll)
+            println(gs.roll; locks=[gs(i) for i in 1:n_track_colors])
         end
         for i in eachindex(players)
+            if verbose; println(players[i]) end
             players[i].strategy(gs, i; verbose=verbose)
         end
         gs.roll = Roll()
@@ -269,10 +279,10 @@ function run_game(players; verbose::Bool=true)
         end
         println(scores_string)
         println("")
-        if length(winning_score) > 0
+        if length(winning_score) > 1
             println("Players $winners tied for the win!")
         else
-            pritnln("Player $(winners[1]) won!")
+            println("Player $(winners[1]) won!")
         end
     end
     return winners
