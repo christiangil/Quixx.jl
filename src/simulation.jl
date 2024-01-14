@@ -166,7 +166,7 @@ function println(roll::Roll; locks::Vector{Bool}=[false, false, false, false])
     str = ""
     for i in eachindex(track_colors)
         if locks[i]
-            str *= color_emojis[i] * ": X "
+            str *= color_emojis[i] * ": 🔒 "
         else
             str *= color_emojis[i] * ": $(roll(i)) "
         end
