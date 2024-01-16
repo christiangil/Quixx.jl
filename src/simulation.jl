@@ -64,6 +64,9 @@ dice_number_to_progress(dice_number::Int, ts::TrackState) = dice_number_to_progr
 progress_to_dice_number(progress::Int, x) = dice_number_to_progress(progress, x)
 
 
+const max_penalties = 4
+
+
 """
     validate_PlayerState(penalties)
 
@@ -74,7 +77,7 @@ function validate_PlayerState(red, yellow, green, blue, penalties)
     validate_TrackState(yellow)
     validate_TrackState(green)
     validate_TrackState(blue)
-    @assert 0 <= penalties < 5
+    @assert 0 <= penalties <= max_penalties
 end
 
 
@@ -201,6 +204,9 @@ GameState(players) = GameState(false, false, false, false, false, 1, players, Ro
 (gs::GameState)(i::Int) = gs(track_colors[i])
 
 
+const max_colors_locked = 2
+
+
 """
     update_PlayerState!(ts::TrackState, dice_roll::Int; n_marked_increase::Int=1)
 
@@ -208,28 +214,13 @@ Update a player's track state with new progress, returns whether or not the game
 """
 function update_PlayerState!(gs::GameState, ps::PlayerState, choice::String, dice_roll::Int; kwargs...)
     setproperty!(gs, Symbol(choice * "_locked"), update_TrackState!(ps(choice), dice_roll; kwargs...) || gs(choice))
-    if sum([gs(color) for color in track_colors]) >= 2
+    if sum([gs(color) for color in track_colors]) >= max_colors_locked
         gs.game_over = true
     end
     return gs.game_over
-    # if choice == 1
-    #     gs.red_locked = update_TrackState(ps.red, dice_roll; kwargs...) || gs.red_locked
-    # end
-    # if choice == 2
-    #     gs.yellow_locked = update_TrackState(ps.yellow, dice_roll; kwargs...) || gs.yellow_locked
-    # end
-    # if choice == 3
-    #     gs.green_locked = update_TrackState(ps.green, dice_roll; kwargs...) || gs.green_locked
-    # end
-    # if choice == 4
-    #     gs.blue_locked = update_TrackState(ps.blue, dice_roll; kwargs...) || gs.blue_locked
-    # end    
 end
 update_PlayerState!(gs::GameState, ps::PlayerState, choice::Int, dice_roll::Int; kwargs...) = 
     update_PlayerState!(gs, ps, track_colors[choice], dice_roll; kwargs...)
-
-
-const max_penalties = 4
 
 
 function add_penalty!(gs::GameState, ps::PlayerState; max_pen::Int=max_penalties)
@@ -242,27 +233,47 @@ end
 
 
 const triangular_numbers = Int.([n*(n+1)/2 for n in 0:12])
+const penalty_score_cost = 5
+
+
 score(ts::TrackState) = triangular_numbers[ts.n_marked+1]
 """
     score(ps)
 
 Calulates the player's current score
 """
-score(ps::PlayerState) = score(ps.red) + score(ps.yellow) + score(ps.blue) + score(ps.green) - 5 * ps.penalties
+score(ps::PlayerState) = score(ps.red) + score(ps.yellow) + score(ps.blue) + score(ps.green) - penalty_score_cost * ps.penalties
 
 
 function run_game(players; verbose::Bool=true)
     if verbose; println("Let's Quixx!") end
     gs = GameState(players)
+    colors_locked_previous_turn = [false for i in 1:n_track_colors]  # enables players to lock the same color on the same turn
+    colors_locked = [false for i in 1:n_track_colors]  
+    game_over = false  # enables players to all get their turn in final round
     while !gs.game_over
         if verbose
             println("Player $(gs.whose_turn)'s turn")
-            println(gs.roll; locks=[gs(i) for i in 1:n_track_colors])
+            println(gs.roll; locks=[gs(color) for color in track_colors])
         end
         for i in eachindex(players)
             if verbose; println(players[i]) end
             players[i].strategy(gs, i; verbose=verbose)
+            for i in 1:n_track_colors
+                colors_locked[i] = gs(i) || colors_locked[i]
+                setproperty!(gs, Symbol(track_colors[i] * "_locked"), colors_locked_previous_turn[i])
+            end
+            game_over = gs.game_over || game_over
+            gs.game_over = false
         end
+        colors_locked_previous_turn .= colors_locked
+        for i in 1:n_track_colors
+            setproperty!(gs, Symbol(track_colors[i] * "_locked"), colors_locked[i])
+        end
+        if sum([gs(color) for color in track_colors]) >= max_colors_locked  # dealing with there being 0 locks then two separate colors being locked in one turn
+            game_over = true
+        end
+        gs.game_over = game_over
         gs.roll = Roll()
         gs.whose_turn = (gs.whose_turn % length(players)) + 1
         validate_GameState(gs)
@@ -285,5 +296,5 @@ function run_game(players; verbose::Bool=true)
             println("Player $(winners[1]) won!")
         end
     end
-    return winners
+    return winners, gs
 end

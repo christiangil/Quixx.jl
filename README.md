@@ -4,6 +4,8 @@
     <img width="400px" src="https://raw.githubusercontent.com/christiangil/Quixx.jl/main/logo/quixx.png"/>
 </p>
 
+QWIXX is a trademark of Gamewright, a division of Ceaco, Inc. No copywright infringment is intended by this project.
+
 This is a Julia package that can run around 50000(!) Quixx games per second I made to try out different Quixx strategies. It's a fun game that you should [buy](https://gamewright.com/product/Qwixx)!
 
 Will be running some strategy tournaments with strategies such as
