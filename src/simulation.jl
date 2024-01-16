@@ -38,6 +38,9 @@ validate_TrackState(ts::TrackState) = validate_TrackState(ts.n_marked, ts.progre
 TrackState(reversed) = TrackState(0, 1, reversed)
 
 
+const marks_for_track_lock = 5
+
+
 """
     update_TrackState!(ts::TrackState, dice_roll::Int; n_marked_increase::Int=1)
 
@@ -48,7 +51,7 @@ function update_TrackState!(ts::TrackState, dice_roll::Int; n_marked_increase::I
     proposed_progress = dice_number_to_progress(dice_roll, ts)
     @assert proposed_progress > ts.progress
     just_locked = proposed_progress == 12
-    if just_locked; @assert ts.n_marked >= 5 end
+    if just_locked; @assert ts.n_marked >= marks_for_track_lock end
     ts.progress = proposed_progress
     ts.n_marked += just_locked + n_marked_increase
     validate_TrackState(ts)
@@ -213,7 +216,7 @@ const max_colors_locked = 2
 Update a player's track state with new progress, returns whether or not the game is over
 """
 function update_PlayerState!(gs::GameState, ps::PlayerState, choice::String, dice_roll::Int; kwargs...)
-    setproperty!(gs, Symbol(choice * "_locked"), update_TrackState!(ps(choice), dice_roll; kwargs...) || gs(choice))
+    setproperty!(gs, Symbol(choice * "_locked"), gs(choice) || update_TrackState!(ps(choice), dice_roll; kwargs...) )
     if sum([gs(color) for color in track_colors]) >= max_colors_locked
         gs.game_over = true
     end
@@ -251,7 +254,9 @@ function run_game(players; verbose::Bool=true)
     colors_locked_previous_turn = [false for i in 1:n_track_colors]  # enables players to lock the same color on the same turn
     colors_locked = [false for i in 1:n_track_colors]  
     game_over = false  # enables players to all get their turn in final round
+    total_rolls = 0
     while !gs.game_over
+        total_rolls += 1
         if verbose
             println("Player $(gs.whose_turn)'s turn")
             println(gs.roll; locks=[gs(color) for color in track_colors])
@@ -270,7 +275,7 @@ function run_game(players; verbose::Bool=true)
         for i in 1:n_track_colors
             setproperty!(gs, Symbol(track_colors[i] * "_locked"), colors_locked[i])
         end
-        if sum([gs(color) for color in track_colors]) >= max_colors_locked  # dealing with there being 0 locks then two separate colors being locked in one turn
+        if sum([gs(color) for color in track_colors]) >= max_colors_locked  # dealing with there being 0 locks then two separate colors being locked by different players in one turn
             game_over = true
         end
         gs.game_over = game_over
@@ -296,5 +301,5 @@ function run_game(players; verbose::Bool=true)
             println("Player $(winners[1]) won!")
         end
     end
-    return winners, gs
+    return winners, gs, total_rolls
 end
