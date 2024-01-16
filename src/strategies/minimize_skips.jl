@@ -49,6 +49,7 @@ function minimize_skips_strategy(gs::GameState, player_index::Int; max_skip::Int
     ps = gs.players[player_index]
     this_players_turn = player_index == gs.whose_turn
     @assert 0 <= max_skip <= legal_max_skips
+    @assert 0 <= penalty_max_skip <= legal_max_skips
     white_roll = roll.white1 + roll.white2
 
     if this_players_turn
@@ -63,8 +64,7 @@ function minimize_skips_strategy(gs::GameState, player_index::Int; max_skip::Int
         if debug; println(color_roll_skips, white_roll_skips) end
         min_skip = min(minimum(color_roll_skips), minimum(white_roll_skips))
 
-        # TODO: add different threshold for avoiding penalties
-        if min_skip > max_skip  # only take a dice if it is to our taste
+        if min_skip > penalty_max_skip  # only take a dice if it is to our taste
             if verbose
                 if min_skip == too_many_skips
                     println("Player $player_index is taking a penalty (couldn't take anything)") 
